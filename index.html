@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>AI Mobile: Saturn Edition</title>
-    <!-- Запрет зума для ощущения нативного приложения -->
+    <title>AI Mobile Particles</title>
+    <!-- ВАЖНО: Запрет на зум страницы пальцами -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         :root {
@@ -17,15 +17,16 @@
             margin: 0; overflow: hidden; background: #000; 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
             color: white; user-select: none;
-            -webkit-tap-highlight-color: transparent;
+            -webkit-tap-highlight-color: transparent; /* Убирает синий квадрат при тапе */
         }
 
-        /* ЭКРАН ЗАПУСКА */
+        /* --- ЭКРАН ЗАПУСКА --- */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle at center, #222 0%, #000 100%);
             z-index: 999; display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; text-align: center;
+            align-items: center; justify-content: center;
+            padding: 20px; text-align: center;
         }
         #start-btn {
             padding: 20px 60px; font-size: 18px; background: var(--primary); color: #000;
@@ -33,17 +34,17 @@
             box-shadow: 0 0 30px rgba(0, 255, 136, 0.4); text-transform: uppercase;
         }
 
-        /* ГЛАВНЫЙ UI */
+        /* --- UI PANEL (Адаптивная) --- */
         #canvas-container { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1; }
         
         .ui-panel {
             position: absolute; top: 10px; right: 10px; width: 220px;
             background: var(--glass); backdrop-filter: blur(10px);
             padding: 15px; border-radius: 16px; border: 1px solid var(--border);
-            z-index: 10; display: none; transition: opacity 0.5s;
+            z-index: 10; display: none;
         }
         
-        /* КНОПКИ */
+        /* КНОПКИ (Крупнее для пальцев) */
         button.toggle-btn {
             background: rgba(255,255,255,0.1); border: 2px solid transparent;
             color: #ccc; padding: 12px; border-radius: 8px; 
@@ -51,13 +52,10 @@
         }
         button.toggle-btn.active { background: rgba(255,255,255,0.2); color: #fff; }
         
-        #btn-full { border: 1px solid var(--primary); color: var(--primary); background: rgba(0,0,0,0.5); }
-
-        /* Статусы камеры */
+        /* Статусы кнопки видео */
         #btn-cam.status-lost { border-color: var(--error); }
-        #btn-cam.status-ok { border-color: var(--success); color: var(--success); }
+        #btn-cam.status-ok { border-color: var(--success); color: var(--success); box-shadow: 0 0 10px rgba(0,255,0,0.3); }
 
-        /* Сетка форм */
         .shape-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
         button.shape-btn {
             background: rgba(255,255,255,0.1); border: 1px solid var(--border);
@@ -65,30 +63,23 @@
         }
         button.shape-btn.active { background: var(--primary); color: #000; font-weight: bold; }
         
-        /* ПРЕВЬЮ КАМЕРЫ */
+        /* ВИДЕО ПРЕВЬЮ (Маленькое в углу) */
         #webcam-preview {
-            position: absolute; bottom: 20px; left: 20px; width: 100px; height: 133px;
+            position: absolute; bottom: 20px; left: 20px; width: 100px; height: 133px; /* 3:4 aspect ratio for mobile portrait */
             background: #000; border: 1px solid var(--border); z-index: 10;
             border-radius: 10px; transform: scaleX(-1); object-fit: cover;
             opacity: 0; pointer-events: none; transition: opacity 0.3s;
         }
         #webcam-preview.visible { opacity: 0.7; pointer-events: auto; }
 
-        /* REЖИМ FULLSCREEN (Чистый) */
-        body.clean-mode .ui-panel, 
-        body.clean-mode #webcam-preview { 
-            opacity: 0 !important; 
-            pointer-events: none !important; 
+        /* FULLSCREEN HINT */
+        #fs-hint {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; color: #666; pointer-events: none;
         }
 
-        #fs-hint {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: rgba(255,255,255,0.5); font-size: 12px; pointer-events: none;
-            opacity: 0; transition: opacity 1s; z-index: 50;
-            text-shadow: 0 0 5px black; text-transform: uppercase;
-        }
-        body.clean-mode #fs-hint { animation: fadeHint 3s forwards; }
-        @keyframes fadeHint { 0% {opacity:0;} 20% {opacity:1;} 80% {opacity:1;} 100% {opacity:0;} }
+        /* Clean Mode */
+        body.clean-mode .ui-panel, body.clean-mode #webcam-preview { opacity: 0 !important; pointer-events: none; }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -105,9 +96,9 @@
     </div>
 
     <div id="canvas-container"></div>
-    <video id="webcam-preview" class="visible" playsinline autoplay muted></video>
     
-    <div id="fs-hint">Двойной тап для меню</div>
+    <!-- playsinline важно для iPhone/Android чтобы видео не открывалось на весь экран -->
+    <video id="webcam-preview" class="visible" playsinline autoplay muted></video>
 
     <div class="ui-panel" id="ui-panel">
         <button id="btn-full" class="toggle-btn" onclick="toggleFullscreen()">⛶ На весь экран</button>
@@ -120,16 +111,18 @@
         <div class="shape-grid">
             <button class="shape-btn active" onclick="setShape('sphere')">Сфера</button>
             <button class="shape-btn" onclick="setShape('heart')">Сердце</button>
-            <!-- ВЕРНУЛ САТУРН -->
-            <button class="shape-btn" onclick="setShape('saturn')">Сатурн</button>
+            <button class="shape-btn" onclick="setShape('bear')">Мишка</button>
             <button class="shape-btn" onclick="setShape('dna')">ДНК</button>
         </div>
         
         <input type="color" id="colorPicker" value="#00ff88" style="width:100%; height:40px; border:none; background:none;">
     </div>
+    
+    <div id="fs-hint">Двойной тап: скрыть меню</div>
 
     <script>
         // --- MOBILE CONFIG ---
+        // Снижаем количество частиц для телефонов
         const CONFIG = { particleCount: 12000, baseSize: 0.12, smooth: 0.1 };
         const STATE = {
             scale: 1, audioPulse: 0, rotX: 0, rotY: 0, tilt: 0,
@@ -141,51 +134,21 @@
         let audioCtx, analyser, dataArray;
         let isAudioAllowed = false;
 
-        // --- FULLSCREEN LOGIC (FIXED) ---
+        // --- FULLSCREEN ---
         function toggleFullscreen() {
-            // Пытаемся запустить на корневом элементе
-            const elem = document.documentElement;
-            
             if (!document.fullscreenElement) {
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen();
-                } else if (elem.webkitRequestFullscreen) { /* Safari/Chrome */
-                    elem.webkitRequestFullscreen();
-                }
+                document.documentElement.requestFullscreen().catch(e => console.log(e));
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                }
+                if (document.exitFullscreen) document.exitFullscreen();
             }
         }
-
-        // Слушатель изменений, чтобы скрывать UI
-        document.addEventListener("fullscreenchange", onFullScreenChange, false);
-        document.addEventListener("webkitfullscreenchange", onFullScreenChange, false);
-
-        function onFullScreenChange() {
-            const isFull = document.fullscreenElement || document.webkitFullscreenElement;
-            if (isFull) {
-                document.body.classList.add('clean-mode');
-                document.getElementById('btn-full').innerText = "❌ Выход";
-            } else {
-                document.body.classList.remove('clean-mode');
-                document.getElementById('btn-full').innerText = "⛶ На весь экран";
-            }
-        }
-
-        // Двойной тап для выхода/входа (резервный вариант)
+        // Double tap handler
         let lastTap = 0;
         document.addEventListener('touchend', function(e) {
-            // Не срабатывать, если нажали на кнопку
-            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-            
             const currentTime = new Date().getTime();
             const tapLength = currentTime - lastTap;
             if (tapLength < 500 && tapLength > 0) {
-                toggleFullscreen();
+                document.body.classList.toggle('clean-mode');
                 e.preventDefault();
             }
             lastTap = currentTime;
@@ -198,6 +161,7 @@
             
             initThree();
 
+            // Init Audio
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
@@ -214,19 +178,219 @@
                 document.getElementById('btn-mic').style.opacity = '0.3';
             }
 
+            // Init Camera Manually for Mobile (Best practice)
             await initCameraAndMediaPipe();
 
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('ui-panel').style.display = 'block';
         }
 
-        // --- CAMERA ---
+        // --- CAMERA & MEDIAPIPE ---
         async function initCameraAndMediaPipe() {
             const video = document.getElementById('webcam-preview');
             const camBtn = document.getElementById('btn-cam');
 
+            // 1. Ручной запуск камеры с facingMode: 'user' (Фронталка)
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'user', // Фронтальная камера
-                        width: 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                video.srcObject = stream;
+                await new Promise(resolve => video.onloadedmetadata = resolve);
+                video.play();
+            } catch (e) {
+                alert("Ошибка камеры! Проверьте, что сайт открыт через HTTPS.");
+                return;
+            }
+
+            // 2. MediaPipe Hands
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1, // 0 - быстрее, 1 - точнее. Для современных телефонов 1 ок.
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults((results) => {
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    TARGET.detected = true;
+                    camBtn.classList.remove('status-lost');
+                    camBtn.classList.add('status-ok');
+
+                    const lm = results.multiHandLandmarks[0];
+                    const dist = Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y);
+                    TARGET.scale = Math.max(0.5, Math.min(3.0 - (dist*10), 3.0));
+                    
+                    // Center palm logic
+                    TARGET.x = ((lm[9].x)-0.5)*2; 
+                    TARGET.y = ((lm[9].y)-0.5)*2;
+                    
+                    // Tilt
+                    const dx = lm[9].x - lm[0].x;
+                    const dy = lm[9].y - lm[0].y;
+                    TARGET.tilt = Math.atan2(dy, dx) + Math.PI/2;
+                } else {
+                    TARGET.detected = false;
+                    camBtn.classList.remove('status-ok');
+                    camBtn.classList.add('status-lost');
+                }
+            });
+
+            // Цикл отправки кадров в MediaPipe
+            async function detectionLoop() {
+                if (video.readyState === 4) {
+                    await hands.send({image: video});
+                }
+                requestAnimationFrame(detectionLoop);
+            }
+            detectionLoop();
+        }
+
+        // --- THREE.JS ---
+        let targetPositions = new Float32Array(CONFIG.particleCount * 3);
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.z = 9; // Чуть дальше для мобильных экранов
+            
+            renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true }); // Antialias off для FPS
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Texture
+            const cvs = document.createElement('canvas'); cvs.width=32; cvs.height=32;
+            const ctx = cvs.getContext('2d');
+            const grad = ctx.createRadialGradient(16,16,0,16,16,16);
+            grad.addColorStop(0,'white'); grad.addColorStop(1,'transparent');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,32,32);
+            const tex = new THREE.Texture(cvs); tex.needsUpdate = true;
+
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(CONFIG.particleCount * 3);
+            for(let i=0; i<CONFIG.particleCount*3; i++) pos[i] = (Math.random()-0.5)*20;
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+
+            const mat = new THREE.PointsMaterial({
+                size: CONFIG.baseSize, map: tex, transparent: true, opacity: 0.8,
+                blending: THREE.AdditiveBlending, depthWrite: false, color: STATE.baseColor
+            });
+
+            particles = new THREE.Points(geo, mat);
+            scene.add(particles);
+            setShape('sphere');
+            animate();
+        }
+
+        function lerp(s, e, a) { return (1-a)*s + a*e; }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Audio
+            if (isAudioAllowed && audioCtx.state === 'running' && analyser) {
+                analyser.getByteFrequencyData(dataArray);
+                let sum = 0; for(let i=0; i<8; i++) sum+=dataArray[i];
+                STATE.audioPulse = lerp(STATE.audioPulse, (sum/8)/255, 0.2);
+                
+                if(STATE.audioPulse > 0.35) {
+                    const h = STATE.baseColor.getHSL({});
+                    particles.material.color.setHSL(h.h, h.s, Math.min(1, 0.5 + STATE.audioPulse));
+                } else {
+                    particles.material.color.lerp(STATE.baseColor, 0.1);
+                }
+            }
+
+            // Logic
+            if (TARGET.detected) {
+                STATE.scale = lerp(STATE.scale, TARGET.scale, CONFIG.smooth);
+                const vx = (Math.abs(TARGET.x)>0.1) ? TARGET.x*0.05 : 0;
+                const vy = (Math.abs(TARGET.y)>0.1) ? TARGET.y*0.05 : 0;
+                STATE.rotY = lerp(STATE.rotY, vx, CONFIG.smooth);
+                STATE.rotX = lerp(STATE.rotX, vy, CONFIG.smooth);
+                STATE.tilt = lerp(STATE.tilt, -TARGET.tilt, CONFIG.smooth);
+            } else {
+                STATE.scale = lerp(STATE.scale, 1, 0.05);
+                STATE.rotY = lerp(STATE.rotY, 0.002, 0.05);
+                STATE.rotX = lerp(STATE.rotX, 0, 0.05);
+                STATE.tilt = lerp(STATE.tilt, 0, 0.05);
+            }
+
+            const totalScale = STATE.scale + (STATE.audioPulse * 0.5);
+            particles.scale.set(totalScale, totalScale, totalScale);
+            particles.rotation.y += STATE.rotY;
+            particles.rotation.x += STATE.rotX;
+            particles.rotation.z = STATE.tilt;
+
+            const p = particles.geometry.attributes.position.array;
+            for(let i=0; i<CONFIG.particleCount*3; i++) p[i] += (targetPositions[i]-p[i])*0.08;
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+
+        // --- UTILS & SHAPES ---
+        function getSpherePoint(cx, cy, cz, r) {
+            const u = Math.random(), v = Math.random();
+            const theta = 2 * Math.PI * u;
+            const phi = Math.acos(2 * v - 1);
+            return {
+                x: cx + r * Math.sin(phi) * Math.cos(theta),
+                y: cy + r * Math.sin(phi) * Math.sin(theta),
+                z: cz + r * Math.cos(phi)
+            };
+        }
+
+        window.setShape = function(s) {
+            for(let i=0; i<CONFIG.particleCount; i++) {
+                let x,y,z;
+                if (s === 'sphere') {
+                    const p = getSpherePoint(0,0,0, 3.5); x=p.x; y=p.y; z=p.z;
+                } else if (s === 'bear') {
+                    const r = Math.random();
+                    let p;
+                    if(r<0.35) p = getSpherePoint(0,-1,0,1.6);
+                    else if(r<0.6) p = getSpherePoint(0,1.3,0,1.1);
+                    else if(r<0.7) p = getSpherePoint(Math.random()>0.5?0.9:-0.9,-2.6,0,0.6);
+                    else if(r<0.8) p = getSpherePoint(Math.random()>0.5?1.6:-1.6,-0.2,0.2,0.55);
+                    else if(r<0.9) p = getSpherePoint(Math.random()>0.5?0.85:-0.85,2.1,0,0.35);
+                    else p = getSpherePoint(0,1.2,0.9,0.35);
+                    x=p.x; y=p.y; z=p.z;
+                } else if (s === 'heart') {
+                   const t=Math.random()*6.28, p=Math.random()*3.14;
+                   x=16*Math.pow(Math.sin(t),3); y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t); z=5*Math.cos(p)*Math.sin(t);
+                   x*=0.18; y*=0.18; z*=0.18;
+                } else if (s === 'dna') {
+                     const ang=(Math.random()*3*6.28)+(i%2*3.14); 
+                     x=Math.cos(ang)*2+(Math.random()-0.5); y=(Math.random()-0.5)*10; z=Math.sin(ang)*2+(Math.random()-0.5);
+                }
+                targetPositions[i*3]=x; targetPositions[i*3+1]=y; targetPositions[i*3+2]=z;
+            }
+            document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+            if(event) event.target.classList.add('active');
+        };
+
+        window.toggleMic = function() {
+            if(!audioCtx) return;
+            if(audioCtx.state==='running') { audioCtx.suspend(); document.getElementById('btn-mic').classList.replace('active','off'); STATE.audioPulse=0; }
+            else { audioCtx.resume(); document.getElementById('btn-mic').classList.replace('off','active'); }
+        }
+        window.toggleCam = function() {
+            const vid = document.getElementById('webcam-preview');
+            vid.classList.toggle('visible');
+            document.getElementById('btn-cam').classList.toggle('off');
+        }
+
+        document.getElementById('colorPicker').addEventListener('input', (e) => STATE.baseColor.set(e.target.value));
+        window.addEventListener('resize', () => {camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);});
+    </script>
+</body>
+</html>
